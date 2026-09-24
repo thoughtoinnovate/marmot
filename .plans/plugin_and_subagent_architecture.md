@@ -60,13 +60,18 @@ allowed_paths = [] # No local filesystem access
 ```
 If the plugin attempts to read `~/.ssh/id_rsa` or contact a malicious IP, the Wasm runtime instantly terminates it.
 
-### 2.2 Polyglot Plugin Development
-Because Extism supports multiple languages, community developers can write Marmot plugins in:
-* **TypeScript/JavaScript**
-* **Rust**
-* **Go**
-* **Python**
-They all compile to `.wasm` and communicate with Marmot via JSON over Extism's shared memory.
+### 2.2 The "Any Language" Philosophy (Universal Wasm ABI)
+To keep the Rust microkernel incredibly lightweight, Marmot completely avoids embedding language-specific interpreters (no embedded V8, no embedded Lua runtime). 
+
+Instead, **a plugin can be written in ANY language**.
+Because Marmot relies on Extism, WebAssembly (`.wasm`) is the universal boundary. Whether a developer writes a plugin in:
+* TypeScript / JavaScript
+* Lua
+* Python
+* Go / Zig
+* Rust or C++
+
+...they simply compile it to a `.wasm` file. The Marmot engine does not care what language was originally used. It only cares that the Wasm sandbox receives JSON bytes and returns JSON bytes. This ensures infinite extensibility without bloating the core engine.
 
 ### 2.3 Plugin Multiplicity (1-to-N Mapping)
 A crucial architectural rule: **A plugin is not restricted to a single tool.** 
