@@ -23,7 +23,13 @@ Deep dive into extensibility and concurrency.
 - **Self-Improvement Harness**: [Read the philosophical core](./self_improvement_harness.md) of how Marmot writes and hot-reloads its own Wasm plugins.
 - **Code Intelligence**: Live LSP (Language Server Protocol) integration for instant agent self-correction.
 
-### 3. 🛠️ [Tools Arsenal & RAG Strategy](./tools_arsenal_and_rag.md)
+### 3. 📦 [Marmot SDK (Python & TypeScript)](./marmot_sdk_specification.md)
+Programmatic agent orchestration.
+- Build custom tools natively using `@tool` decorators.
+- Orchestrate parallel background subagents.
+- Stream events to your own custom applications.
+
+### 4. 🛠️ [Tools Arsenal & RAG Strategy](./tools_arsenal_and_rag.md)
 The deterministic-first approach to code exploration.
 - Ripgrep (`grep_search`) and AST-aware LSP queries (`goto_definition`) over probabilistic RAG.
 - The optional `marmot-plugin-rag` (SQLite vector search) for enterprise monorepos.
