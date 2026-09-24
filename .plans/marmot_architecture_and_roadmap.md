@@ -137,6 +137,11 @@ pub enum MarmotEvent {
 }
 ```
 
+### 2.3 Real-time Streaming (WebUIs & Plugins)
+Because the core engine is decoupled, streaming events (like `TokenDelta` or `StatusMessage`) must reach various clients efficiently:
+* **Web UI / Electron (External Clients)**: `marmot-server` binds an axum/warp server and exposes a **Server-Sent Events (SSE)** or **WebSocket** endpoint (e.g., `ws://localhost:9123/stream`). The WebUI subscribes to this stream and receives JSON-serialized `MarmotEvent`s in real-time, completely bypassing the TUI.
+* **TUI/Wasm Plugins (Internal Clients)**: Wasm plugins run via Extism. Because Extism function calls are typically synchronous, a Wasm plugin that wants to stream data back to the core UI uses **Extism Host Functions**. The plugin calls `marmot_emit_event(json_ptr)` from inside the sandbox, which the Rust host instantly forwards onto the central `tokio` event bus.
+
 ---
 
 ## 3. Performance & Low-End Machine Optimizations (The Rust Edge)

@@ -73,6 +73,11 @@ A crucial architectural rule: **A plugin is not restricted to a single tool.**
 A single plugin can bundle multiple tools, background tasks, and UI components. 
 * *Example*: The internal `marmot-plugin-github` does not just provide a single tool. It registers `create_pr`, `review_pr`, and `list_issues` to the Tool Registry, while simultaneously injecting a "PR Status" widget into the TUI status bar via the Event Bus.
 
+### 2.4 Overriding Internal Plugins (Hooks & Priority)
+A true microkernel allows users to completely replace its core behaviors. Marmot achieves this through **Priority-based Routing** and **Middleware Hooks**.
+* **High-Priority Shadowing**: Every tool registered in the Event Bus has a priority weight. Internal tools default to `priority: 0`. If you write a custom Wasm plugin that registers the `edit_file` tool with `priority: 10`, the Core Engine will route all future `edit_file` requests to *your* plugin instead of the internal one. This allows you to completely replace native capabilities.
+* **Middleware Hooks (Interception)**: If you don't want to replace a tool, but just want to modify its behavior (e.g., adding security audit logs to every `run_bash` command), your Wasm plugin can register as Middleware. It subscribes to the `pre_tool_call` and `post_tool_call` lifecycle events. It can mutate the JSON parameters before they reach the internal plugin, or mutate the output before it returns to the LLM.
+
 ---
 
 ## 3. LSP Integration (Live Self-Correction)
