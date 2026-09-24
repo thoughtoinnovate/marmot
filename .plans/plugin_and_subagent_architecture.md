@@ -1,0 +1,102 @@
+# Marmot: Subagent & Plugin Architecture Specification
+
+This document details the architecture for the two primary extensibility and concurrency mechanisms in Marmot: **Subagents** (parallel AI actors) and **Plugins** (sandboxed community tools).
+
+---
+
+## 1. Subagent Architecture (The Actor Model)
+
+Marmot treats subagents as independent, asynchronous background tasks (Actors) rather than blocking function calls. This prevents the primary TUI and Main Agent from hanging during long operations.
+
+### 1.1 Context & Isolation
+Subagents do **not** share the parent agent's context window. This is a deliberate design choice ("Context Economy") to prevent a subagent's massive `grep` outputs or compiler errors from polluting the Main Agent's memory.
+* **Input**: Inherits only the project `MARMOT.md` rules and a specific `Prompt` from the parent.
+* **Output**: Returns a synthesized summary of findings/actions upon completion.
+
+### 1.2 Workspace Modes
+When a parent agent spawns a subagent, it assigns a workspace isolation mode:
+1. **`Inherit`**: Operates in the exact same directory as the parent. Best for read-only research or safe edits.
+2. **`Worktree` (Git Worktree)**: Creates a temporary branched git worktree. The subagent can attempt speculative refactors, run destructive tests, or try complex migrations without touching the user's uncommitted changes. If successful, the parent can merge the diff.
+3. **`Scratch`**: An isolated `/tmp/marmot-session-xyz/` folder for executing untrusted code or isolated build experiments.
+
+### 1.3 Subagent Communication (The Event Bus)
+Because subagents are decoupled actors, they communicate via the central Tokio Event Bus using standard messages:
+
+* **Parent-to-Child**: The Main Agent spawns a subagent and receives its ID. It can send follow-up constraints using `MessageSubagent { target: child_id, text }`.
+* **Peer-to-Peer (Inter-Agent)**: Subagents *can* communicate with each other directly if they know the peer's ID. For example, a `Build` agent can send a message directly to a `Test` agent to verify a compiled binary, without polluting the Main Agent's context window.
+* **User-to-Subagent**: The human user is an actor on the bus. By typing `/msg [subagent_id] [text]` in the TUI, the user can steer a specific subagent mid-task (e.g., *"Hey researcher, stop looking at the frontend, look at the backend folder instead"*).
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Main as Main Agent
+    participant Bus as Event Bus
+    participant SubA as Subagent (Build)
+    participant SubB as Subagent (Test)
+    
+    Main->>Bus: Spawn(Build) -> ID: sub-1
+    Main->>Bus: Spawn(Test) -> ID: sub-2
+    Note over SubA, SubB: Peer-to-Peer Interaction
+    SubA->>Bus: MessageSubagent {target: "sub-2", msg: "Binary ready at /tmp/build"}
+    SubB->>Bus: MessageSubagent {target: "sub-1", msg: "Tests failed on line 42"}
+    Note over User, SubB: User Steering
+    User->>Bus: /msg sub-2 "Ignore flaky test #4"
+```
+
+---
+
+## 2. Plugin Architecture (Extism Wasm Sandbox)
+
+To support community extensions safely (without the security nightmare of arbitrary node.js/python scripts running on a user's machine), Marmot uses **WebAssembly (WASI)** via [Extism](https://extism.org/).
+
+### 2.1 Capability-Based Security
+Community plugins are distributed as `.wasm` binaries. When Marmot loads a plugin, it explicitly grants capabilities:
+```toml
+# Example marmot-plugin.toml
+[plugin.community-jira-integration]
+wasm_url = "https://registry.marmot.ai/jira-v1.wasm"
+allowed_hosts = ["*.atlassian.net"]
+allowed_paths = [] # No local filesystem access
+```
+If the plugin attempts to read `~/.ssh/id_rsa` or contact a malicious IP, the Wasm runtime instantly terminates it.
+
+### 2.2 Polyglot Plugin Development
+Because Extism supports multiple languages, community developers can write Marmot plugins in:
+* **TypeScript/JavaScript**
+* **Rust**
+* **Go**
+* **Python**
+They all compile to `.wasm` and communicate with Marmot via JSON over Extism's shared memory.
+
+### 2.3 Plugin Multiplicity (1-to-N Mapping)
+A crucial architectural rule: **A plugin is not restricted to a single tool.** 
+A single plugin can bundle multiple tools, background tasks, and UI components. 
+* *Example*: The internal `marmot-plugin-github` does not just provide a single tool. It registers `create_pr`, `review_pr`, and `list_issues` to the Tool Registry, while simultaneously injecting a "PR Status" widget into the TUI status bar via the Event Bus.
+
+---
+
+## 3. LSP Integration (Live Self-Correction)
+
+Instead of relying solely on heavy `bash` commands like `cargo test` or `npm run build` to verify code, Marmot integrates directly with the Language Server Protocol (LSP).
+
+### The Mid-Turn Diagnostic Loop
+1. **Action**: The Agent edits a file (`edit_file src/db.rs`).
+2. **Intercept**: Before presenting the turn as complete to the user, Marmot queries the local LSP (e.g., `rust-analyzer` or `tsserver`).
+3. **Feedback**: If the LSP returns an error (e.g., `E0432: unresolved import`), Marmot transparently feeds this back to the Agent as a system prompt: *"Your last edit caused a compiler error on line 12. Fix it."*
+## 4. Session Isolation & Agent-to-Agent (A2A) Protocol
+
+By default, every Marmot session is strictly isolated. Running `marmot` in Terminal A and `marmot` in Terminal B spawns completely independent Microkernel processes with their own memory, token budgets, and temporary scratchpads.
+
+### 4.1 Strict Isolation via IPC
+Each active Marmot session binds to a unique local socket (e.g., `/tmp/marmot-session-<uuid>.sock` or a randomized local TCP port). They do not share state unless explicitly commanded to bridge.
+
+### 4.2 The A2A (Agent-to-Agent) Bridge
+If Marmot Session A needs to delegate a task to Marmot Session B (e.g., Session A is managing the Frontend, Session B is managing the Backend), they communicate using the **Marmot A2A Protocol**.
+* The A2A protocol is a standardized JSON-RPC interface natively supported by the Event Bus.
+* **Command**: Session A emits `A2AMessage { target_session: "<uuid>", payload: "..." }`.
+
+### 4.3 External Interoperability (Talking to Claude Code)
+Because the Marmot A2A socket adheres to open standards, it is completely interoperable with external, third-party agents.
+* A running Marmot session can expose itself as a standard **MCP (Model Context Protocol) Server**.
+* You can configure **Claude Code**, **Cursor**, or **OpenCode** to connect to Marmot's A2A socket.
+* *Example Use Case*: You are using Claude Code, but you want to leverage Marmot's highly-optimized Wasm plugins and Extism capabilities. You tell Claude Code to send a request over the MCP/A2A socket to Marmot: *"Hey Marmot, parse this 5GB CSV file using your Wasm tools and return the summary."* Marmot does the heavy lifting in its isolated session and returns the result to Claude.
