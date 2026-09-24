@@ -14,14 +14,14 @@ This is your single, trackable entrypoint. As you (or an AI agent) complete the 
 ## Phase 1: Core Foundation (The Microkernel & Types)
 *See `spoonfeed_implementation_plan.md` Step 0 - Step 2*
 
-- [ ] **🤖 Agent Instruction (MANDATORY)**: Before writing code for this phase, use your web search tools to explore the best guides and modern practices for lightweight, fast, self-improvable agent state machines and event protocols in Rust.
-- [ ] **Step 0: Workspace Initialization**
-  - [ ] Create workspace `Cargo.toml`.
-  - [ ] Verify: `cargo check` passes.
-- [ ] **Step 1: Crate `marmot-protocol`**
-  - [ ] Create crate structure.
-  - [ ] Define `MarmotCommand` and `MarmotEvent` Enums.
-  - [ ] Verify: `cargo test -p marmot-protocol` passes.
+- [x] **🤖 Agent Instruction (MANDATORY)**: Before writing code for this phase, use your web search tools to explore the best guides and modern practices for lightweight, fast, self-improvable agent state machines and event protocols in Rust.
+- [x] **Step 0: Workspace Initialization**
+  - [x] Create workspace `Cargo.toml`.
+  - [x] Verify: `cargo check` passes.
+- [x] **Step 1: Crate `marmot-protocol`**
+  - [x] Create crate structure.
+  - [x] Define `MarmotCommand` and `MarmotEvent` Enums.
+  - [x] Verify: `cargo test -p marmot-protocol` passes.
 - [ ] **Step 2: Crate `marmot-tools`**
   - [ ] Create crate structure.
   - [ ] Implement `ViewFileTool`, `WriteFileTool`, and `RunBashTool`.
